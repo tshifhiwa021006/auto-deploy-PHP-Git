@@ -1,81 +1,87 @@
 # Auto Deploy PHP Git
 
-A professional automatic PHP deployment system with GitHub webhooks, secure rollback capabilities, real-time notifications, and comprehensive security features.
+Automatically update your website when you push code to GitHub. No manual uploads needed.
 
-## Features
+## What It Does
 
-- ✅ **GitHub Webhook Integration** — Automatic deployments on push/pull request events
-- ✅ **Zero-Downtime Deployments** — Symlink-based release strategy
-- ✅ **Rollback Support** — One-command rollback to previous releases
-- ✅ **Notifications** — Slack, email, and webhook notifications
-- ✅ **Security** — SSH key verification, signature validation, environment encryption
-- ✅ **Logging & Monitoring** — Detailed deployment logs and history
-- ✅ **Pre/Post Hooks** — Custom scripts before/after deployment
-- ✅ **Health Checks** — Automatic deployment verification
-- ✅ **Multi-Branch Support** — Deploy different branches to different environments
+When you push code to GitHub, this tool automatically:
+- Downloads your new code
+- Updates your website
+- Checks if everything works
+- Sends you a message saying it's done
 
-## Requirements
+## What You Can Do With It
 
-- PHP >= 7.4
-- PHP Extensions: `json`, `curl`, `zip`, `openssl`
-- SSH access to production server
-- Git installed
-- Composer (for dependency management)
+- Push code to GitHub, website updates automatically
+- Get notified on Slack when your code goes live
+- Go back to an old version if something breaks
+- Run commands before and after updating
+- Check if your website is working after each update
+- Deploy different code to different servers
+- View a history of all your deployments
 
-## Installation
+## What You Need
 
-### 1. Clone the Repository
+- PHP 7.4 or higher
+- Git installed on your computer and server
+- Composer (for installing libraries)
+- SSH access to your server (to upload files)
+- A GitHub account
+
+## How to Set It Up
+
+### Step 1: Download the Tool
 
 ```bash
 git clone https://github.com/tshifhiwa021006/auto-deploy-PHP-Git.git
 cd auto-deploy-PHP-Git
 ```
 
-### 2. Install Dependencies
+### Step 2: Install Libraries
 
 ```bash
 composer install
 ```
 
-### 3. Configure Deployment
+### Step 3: Set Up Your Settings
 
-Copy the example configuration:
+Copy the example settings file:
 
 ```bash
 cp config.example.php config.php
 ```
 
-Edit `config.php` with your deployment settings:
+Edit `config.php` and put in YOUR information:
 
 ```php
 <?php
 return [
     'deployment' => [
-        'repository' => 'git@github.com:username/your-repo.git',
-        'branch' => 'main',
-        'deploy_to' => '/var/www/html/app',
-        'keep_releases' => 5,
+        'repository' => 'git@github.com:username/your-repo.git',  // Your GitHub repo
+        'branch' => 'main',                                        // Branch to deploy
+        'deploy_to' => '/var/www/html/app',                       // Where to upload
+        'keep_releases' => 5,                                      // Keep last 5 versions
     ],
     'github' => [
-        'webhook_secret' => 'your-webhook-secret',
-        'token' => 'github-personal-access-token',
+        'webhook_secret' => 'your-webhook-secret',                // Secret code from GitHub
+        'token' => 'github-personal-access-token',               // Your GitHub access token
     ],
     'notifications' => [
-        'slack_webhook' => 'https://hooks.slack.com/services/YOUR/WEBHOOK/URL',
-        'email' => 'admin@example.com',
+        'slack_webhook' => 'https://hooks.slack.com/...',         // For Slack messages
+        'email' => 'admin@example.com',                           // For email alerts
     ],
     'pre_deploy_hooks' => [
-        'scripts/before-deploy.sh',
+        'scripts/before-deploy.sh',                              // Run before uploading
     ],
     'post_deploy_hooks' => [
-        'scripts/after-deploy.sh',
+        'scripts/after-deploy.sh',                               // Run after uploading
     ],
 ];
 ```
 
-### 4. Create Web Entry Point
+### Step 4: Create the Webhook File
 
-Create `public/webhook.php`:
+Create a new file at `public/webhook.php`:
 
 ```php
 <?php
@@ -90,278 +96,229 @@ $handler = new WebhookHandler($config);
 echo $handler->handle();
 ```
 
-### 5. Set Up GitHub Webhook
+### Step 5: Tell GitHub to Notify Your Server
 
-1. Go to your GitHub repository settings
-2. Navigate to **Settings > Webhooks > Add webhook**
-3. Set **Payload URL** to: `https://your-domain.com/webhook.php`
-4. Set **Content type** to: `application/json`
-5. Set **Secret** to the value from your `config.php`
-6. Select events: `push` and `pull_request`
-7. Click **Add webhook**
+1. Go to your GitHub repo
+2. Click **Settings**
+3. Click **Webhooks**
+4. Click **Add webhook**
+5. Paste your URL: `https://your-website.com/webhook.php`
+6. Content type: `application/json`
+7. Secret: Use the secret from your `config.php`
+8. Select: `push` and `pull_request` events
+9. Click **Add webhook**
 
-## Usage
+Now GitHub will automatically notify your server whenever you push code.
+
+## How to Use It
+
+### Automatic Deployment (Recommended)
+
+Just push your code:
+
+```bash
+git push origin main
+```
+
+Your website updates automatically.
 
 ### Manual Deployment
+
+If you want to deploy manually:
 
 ```bash
 php bin/deploy.php --branch main --environment production
 ```
 
-### View Deployment Status
+### Check Deployment Status
 
 ```bash
 php bin/status.php
 ```
 
-### Rollback to Previous Release
+### Go Back to Previous Version
+
+If something breaks:
 
 ```bash
 php bin/rollback.php
 ```
 
-### View Deployment History
+### See Previous Deployments
 
 ```bash
 php bin/history.php --limit 20
 ```
 
-### Run Health Check
+### Check If Website is Working
 
 ```bash
 php bin/health-check.php
 ```
 
-## Directory Structure
+## Folder Structure
 
 ```
 auto-deploy-PHP-Git/
-├── bin/                    # CLI entry points
-├── src/                    # Source code
-│   ├── WebhookHandler.php
-│   ├── Deployer.php
-│   ├── Rollback.php
-│   ├── Notification.php
-│   ├── Config.php
-│   └── Security.php
-├── public/                 # Web entry points
-│   └── webhook.php
-├── scripts/                # Deployment hooks
-│   ├── before-deploy.sh
-│   └── after-deploy.sh
-├── tests/                  # Test suite
-│   ├── Unit/
-│   └── Integration/
-├── config.example.php      # Example configuration
-├── composer.json
-└── phpunit.xml
+├── bin/                    # Commands you can run
+├── src/                    # The actual tool code
+│   ├── WebhookHandler.php  # Listens for GitHub notifications
+│   ├── Deployer.php        # Does the uploading
+│   ├── Rollback.php        # Goes back to old version
+│   ├── Notification.php    # Sends messages
+│   ├── Config.php          # Reads your settings
+│   └── Security.php        # Checks if it's safe
+├── public/                 # Web files
+│   └── webhook.php         # GitHub talks to this
+├── scripts/                # Commands that run
+│   ├── before-deploy.sh    # Runs before uploading
+│   └── after-deploy.sh     # Runs after uploading
+├── tests/                  # Tests to check if it works
+├── config.example.php      # Example settings
+├── composer.json           # List of libraries needed
+└── phpunit.xml             # Testing configuration
 ```
 
-## Configuration Options
+## What Happens When You Push Code
 
-### Deployment
+1. You type: `git push`
+2. GitHub sends a message to your server
+3. Your server receives the message
+4. Server runs your "before" commands
+5. Server downloads the new code
+6. Server creates a new version folder
+7. Server switches to the new version (super fast)
+8. Server runs your "after" commands
+9. Server checks if website is working
+10. Server sends you a Slack/email message
+11. Everything is done
 
-| Option | Type | Description |
-|--------|------|-------------|
-| `repository` | string | Git repository URL |
-| `branch` | string | Default branch to deploy |
-| `deploy_to` | string | Absolute path on server |
-| `keep_releases` | int | Number of releases to keep |
+## Settings Explained
 
-### Security
+| Setting | What It Does |
+|---------|-------------|
+| `repository` | Your GitHub repo URL |
+| `branch` | Which branch to deploy (main, develop, etc) |
+| `deploy_to` | Where to upload files on your server |
+| `keep_releases` | How many old versions to keep |
+| `webhook_secret` | Secret code to make sure it's really GitHub |
+| `slack_webhook` | Where to send Slack messages |
+| `email` | Email address for alerts |
 
-| Option | Type | Description |
-|--------|------|-------------|
-| `webhook_secret` | string | GitHub webhook secret |
-| `verify_ssl` | bool | Verify SSL certificates |
-| `allowed_ips` | array | Restrict webhook to IPs |
+## Before/After Scripts
 
-### Notifications
+### Before Uploading (`scripts/before-deploy.sh`)
 
-| Option | Type | Description |
-|--------|------|-------------|
-| `slack_webhook` | string | Slack webhook URL |
-| `email` | string | Email for notifications |
-
-## Deployment Flow
-
-1. **Push to GitHub** → Webhook triggered
-2. **Webhook Received** → Request validated
-3. **Pre-Deploy Hooks** → Run before deployment
-4. **Code Fetch** → Clone/pull latest code
-5. **Release Creation** → Create timestamped release
-6. **Current Link Update** → Switch to new release (atomic)
-7. **Post-Deploy Hooks** → Run after deployment
-8. **Health Check** → Verify deployment success
-9. **Notification** → Send status to Slack/Email
-10. **Logging** → Record in history
-
-## Pre/Post Hook Scripts
-
-### Before Deploy (`scripts/before-deploy.sh`)
+Run commands before the website updates:
 
 ```bash
 #!/bin/bash
 set -e
 
-echo "Running pre-deployment tasks..."
+echo "Getting ready to deploy..."
 
-# Run database migrations
+# Update the database
 php artisan migrate --force
 
-# Clear cache
+# Clear old cache
 php artisan cache:clear
 
-# Compile assets
+# Build new files
 npm run build
 ```
 
-### After Deploy (`scripts/after-deploy.sh`)
+### After Uploading (`scripts/after-deploy.sh`)
+
+Run commands after the website updates:
 
 ```bash
 #!/bin/bash
 set -e
 
-echo "Running post-deployment tasks..."
+echo "Finished deploying..."
 
 # Warm up cache
 php artisan cache:warmup
 
-# Restart queues
+# Restart services
 supervisorctl restart all
 
-# Send deployment notification
-curl -X POST https://your-domain.com/api/deployment-complete
+# Tell other systems it's done
+curl -X POST https://your-website.com/api/done
 ```
+
+## Security Tips
+
+- Always use HTTPS (the lock icon)
+- Don't share your secret keys
+- Put secrets in `.env` file, never in your code
+- Only allow GitHub to trigger deployments
+- Check logs regularly
+- Keep your server updated
 
 ## Testing
 
-Run the test suite:
+Make sure everything works:
 
 ```bash
 composer test
 ```
 
-Run static analysis:
+Check code quality:
 
 ```bash
 composer stan
 ```
 
-Fix code style issues:
+Fix code style:
 
 ```bash
 composer fix
 ```
 
-Run all checks:
+## Environment File
 
-```bash
-composer check
-```
-
-## Security Considerations
-
-- ✅ Always use HTTPS for webhook URLs
-- ✅ Store secrets in `.env` file (never commit)
-- ✅ Restrict webhook to GitHub IPs
-- ✅ Verify webhook signatures
-- ✅ Use SSH keys for Git authentication
-- ✅ Run deployment script with minimal privileges
-- ✅ Monitor deployment logs for anomalies
-- ✅ Keep deployment server updated and patched
-
-## Troubleshooting
-
-### Webhook Not Triggering
-
-1. Check GitHub webhook delivery logs
-2. Verify webhook URL is publicly accessible
-3. Confirm secret matches in config
-4. Check firewall rules
-
-### Deployment Fails
-
-1. Check deployment logs: `cat deploy/logs/latest.log`
-2. Verify SSH key permissions: `chmod 600 ~/.ssh/id_rsa`
-3. Ensure PHP has write permissions to deploy path
-4. Run manual deployment with verbose flag
-
-### Rollback Issues
-
-1. Verify releases directory exists: `ls releases/`
-2. Check symlink: `ls -l current/`
-3. Run health check after rollback
-
-## Support & Contributing
-
-For issues, suggestions, or contributions, please open an issue on GitHub.
-
-## License
-
-MIT License - See LICENSE file for details.
-
-## Examples
-
-### Deploy Production on Main Branch Push
-
-```php
-// Automatically triggered via webhook
-// Just push to main and deployment happens automatically
-git push origin main
-```
-
-### Manual Production Deployment
-
-```bash
-php bin/deploy.php --branch main --environment production
-```
-
-### Rollback Last Deployment
-
-```bash
-php bin/rollback.php --environment production
-```
-
-## Environment Variables
-
-Create `.env` file in project root:
+Create `.env` in your project root:
 
 ```
-GITHUB_TOKEN=github_token_here
-SLACK_WEBHOOK=https://hooks.slack.com/services/...
+GITHUB_TOKEN=your_github_token_here
+SLACK_WEBHOOK=https://hooks.slack.com/services/YOUR/WEBHOOK
 DEPLOY_USER=deploy_user
 DEPLOY_HOST=production.example.com
 DEPLOY_PATH=/var/www/html/app
 ```
 
-## Advanced Usage
+## Problems and Solutions
 
-### Custom Deployment Strategies
+### Website Not Updating After I Push
 
-Extend `Deployer` class for custom logic:
+1. Check GitHub webhook logs
+2. Make sure your URL is correct
+3. Check if your secret matches
+4. Check your firewall settings
 
-```php
-class CustomDeployer extends AutoDeployPHP\Deployer {
-    protected function beforeDeploy() {
-        // Custom logic
-    }
-}
-```
+### Deployment Fails
 
-### Conditional Deployments
+1. Look at logs: `cat deploy/logs/latest.log`
+2. Check SSH key: `chmod 600 ~/.ssh/id_rsa`
+3. Make sure PHP can write to the upload folder
+4. Try deploying manually with more details
 
-Deploy only when specific conditions are met:
+### Can't Go Back to Old Version
 
-```php
-$deployer->onlyIf(function($payload) {
-    return $payload['ref'] === 'refs/heads/main' 
-        && $payload['pusher']['name'] !== 'dependabot';
-});
-```
+1. Check if old versions exist: `ls releases/`
+2. Check current link: `ls -l current/`
+3. Run health check after going back
+
+## Help
+
+Found a bug or have ideas? Open an issue on GitHub.
+
+## License
+
+MIT License - You can use this for anything.
 
 ---
 
-**Version:** 1.0.0  
-**Last Updated:** 2026-07-27  
-**Maintained by:** Auto Deploy PHP Contributors
+Version: 1.0.0
+Last Updated: 2026-07-27
