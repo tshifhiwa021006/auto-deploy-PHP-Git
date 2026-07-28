@@ -6,6 +6,7 @@ class Deployer
 {
     private Config $config;
     private Logger $logger;
+    private Notification $notifier;
     private string $deployPath;
     private string $releasesPath;
     private string $currentLink;
@@ -14,6 +15,7 @@ class Deployer
     {
         $this->config = $config;
         $this->logger = $logger;
+        $this->notifier = new Notification($config, $logger);
         $this->deployPath = $config->get('deployment.deploy_to');
         $this->releasesPath = $this->deployPath . '/releases';
         $this->currentLink = $this->deployPath . '/current';
@@ -60,22 +62,46 @@ class Deployer
             // Run health check
             $healthy = $this->healthCheck();
 
-            $this->logger->info("Deployment completed successfully");
-
-            return [
+            $result = [
                 'success' => true,
                 'release' => basename($releaseDir),
                 'path' => $releaseDir,
                 'healthy' => $healthy,
                 'message' => 'Deployment completed successfully',
             ];
+
+            // Notify about success/failure based on health
+            $this->notifier->send($healthy ? 'success' : 'failure', $result['message'], $result);
+
+            $this->logger->info("Deployment completed successfully");
+
+            return $result;
         } catch (\Exception $e) {
             $this->logger->error("Deployment failed: " . $e->getMessage());
-            return [
+
+            $result = [
                 'success' => false,
                 'message' => $e->getMessage(),
             ];
+
+            // Notify about failure
+            try {
+                $this->notifier->send('failure', 'Deployment failed: ' . $e->getMessage(), $result);
+            } catch (\Exception $ne) {
+                $this->logger->warning('Notifier failed: ' . $ne->getMessage());
+            }
+
+            return $result;
         }
+    }
+
+    /**
+     * Rollback to previous release programmatically
+     */
+    public function rollback(): array
+    {
+        $rollback = new Rollback($this->config, $this->logger);
+        return $rollback->run();
     }
 
     /**
@@ -134,7 +160,7 @@ class Deployer
 
         symlink($releaseDir, $tempLink);
 
-        if (is_link($this->currentLink)) {
+        if (is_link($this->currentLink) || file_exists($this->currentLink)) {
             unlink($this->currentLink);
         }
         rename($tempLink, $this->currentLink);
@@ -159,7 +185,7 @@ class Deployer
 
             $escHook = escapeshellarg($hookPath);
             $output = $this->executeCommand("cd {$escDir} && bash {$escHook}");
-            $this->logger->info("Hook output: $output");
+            $this->logger->info("Hook output: " . substr($output, 0, 1000));
         }
     }
 

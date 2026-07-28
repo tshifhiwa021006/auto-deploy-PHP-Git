@@ -3,6 +3,8 @@
 require_once __DIR__ . '/../vendor/autoload.php';
 
 use AutoDeployPHP\Config;
+use AutoDeployPHP\Logger;
+use AutoDeployPHP\Rollback as RollbackRunner;
 
 // Load config
 $configPath = __DIR__ . '/../config.php';
@@ -18,44 +20,16 @@ if (file_exists($configPath)) {
 
 $config = new Config($configArray);
 $deployTo = $config->get('deployment.deploy_to', sys_get_temp_dir());
-$current = $deployTo . '/current';
-$releasesDir = $deployTo . '/releases';
+$logDir = $deployTo . '/deploy_logs';
+$logger = new Logger($logDir);
 
-if (!is_dir($releasesDir)) {
-    fwrite(STDERR, "No releases directory found: $releasesDir\n");
-    exit(1);
+$runner = new RollbackRunner($config, $logger);
+$result = $runner->run();
+
+if (!empty($result['success'])) {
+    echo json_encode($result) . PHP_EOL;
+    exit(0);
 }
 
-$releases = array_values(array_diff(scandir($releasesDir, SCANDIR_SORT_DESCENDING), ['.', '..']));
-if (count($releases) < 2) {
-    fwrite(STDERR, "Not enough releases to rollback\n");
-    exit(1);
-}
-
-// Determine current target and the previous release
-$currentTarget = is_link($current) ? readlink($current) : null;
-
-$previous = $releases[1] ?? null;
-if ($previous === null) {
-    fwrite(STDERR, "No previous release found\n");
-    exit(1);
-}
-
-$previousPath = $releasesDir . '/' . $previous;
-if (!is_dir($previousPath)) {
-    fwrite(STDERR, "Previous release directory not found: $previousPath\n");
-    exit(1);
-}
-
-// Atomically update current symlink
-$tmp = $current . '.tmp';
-if (is_link($tmp)) {
-    unlink($tmp);
-}
-symlink($previousPath, $tmp);
-if (is_link($current)) {
-    unlink($current);
-}
-rename($tmp, $current);
-
-echo "Rolled back to release: $previous\n";
+fwrite(STDERR, json_encode($result) . PHP_EOL);
+exit(2);
