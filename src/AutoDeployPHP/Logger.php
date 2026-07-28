@@ -17,6 +17,16 @@ class Logger
         if (!is_dir($logDir)) {
             mkdir($logDir, 0755, true);
         }
+
+        // Try to ensure latest.log points to today's log file
+        $latestLog = $this->logDir . '/latest.log';
+        if (is_link($latestLog)) {
+            // Do nothing if symlink already exists
+        } else {
+            // Remove any regular file and attempt to create a symlink (use basename to keep symlink relative)
+            @unlink($latestLog);
+            @symlink(basename($this->logFile), $latestLog);
+        }
     }
 
     /**
@@ -52,18 +62,27 @@ class Logger
     }
 
     /**
-     * Log message to file
+     * Log message to file (single append with LOCK_EX)
      */
     private function log(string $level, string $message): void
     {
         $timestamp = date('Y-m-d H:i:s');
         $logMessage = "[$timestamp] [$level] $message" . PHP_EOL;
 
-        file_put_contents($this->logFile, $logMessage, FILE_APPEND);
+        // Ensure log directory exists
+        if (!is_dir($this->logDir)) {
+            @mkdir($this->logDir, 0755, true);
+        }
 
-        // Also log to latest.log symlink
+        // Write to daily file with exclusive lock
+        @file_put_contents($this->logFile, $logMessage, FILE_APPEND | LOCK_EX);
+
+        // If latest.log is not a symlink, try to create or update it (best-effort)
         $latestLog = $this->logDir . '/latest.log';
-        file_put_contents($latestLog, $logMessage, FILE_APPEND);
+        if (!is_link($latestLog)) {
+            @unlink($latestLog);
+            @symlink(basename($this->logFile), $latestLog);
+        }
     }
 
     /**
