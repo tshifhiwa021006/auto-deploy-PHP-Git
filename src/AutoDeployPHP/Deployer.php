@@ -106,16 +106,18 @@ class Deployer
         $repository = $this->config->get('deployment.repository');
         $timeout = $this->config->get('deployment.timeout', 300);
 
+        $escRepo = escapeshellarg($repository);
+        $escBranch = escapeshellarg($branch);
+        $escDir = escapeshellarg($releaseDir);
+
         if (is_dir($releaseDir . '/.git')) {
-            $this->executeCommand(
-                "cd {$releaseDir} && git pull origin {$branch}",
-                $timeout
-            );
+            // Use fetch + reset to ensure a clean state and use shallow fetch
+            $cmd = "cd {$escDir} && git fetch --depth=1 origin {$escBranch} && git reset --hard origin/{$escBranch}";
+            $this->executeCommand($cmd, $timeout);
         } else {
-            $this->executeCommand(
-                "git clone --branch {$branch} {$repository} {$releaseDir}",
-                $timeout
-            );
+            // Shallow clone to reduce network and disk usage
+            $cmd = "git clone --depth=1 --single-branch --branch {$escBranch} {$escRepo} {$escDir}";
+            $this->executeCommand($cmd, $timeout);
         }
     }
 
@@ -143,6 +145,7 @@ class Deployer
      */
     private function runHooks(array $hooks, string $releaseDir): void
     {
+        $escDir = escapeshellarg($releaseDir);
         foreach ($hooks as $hook) {
             $hookPath = $releaseDir . '/' . $hook;
 
@@ -154,43 +157,103 @@ class Deployer
             chmod($hookPath, 0755);
             $this->logger->info("Running hook: $hook");
 
-            $output = $this->executeCommand("cd {$releaseDir} && bash {$hook}");
+            $escHook = escapeshellarg($hookPath);
+            $output = $this->executeCommand("cd {$escDir} && bash {$escHook}");
             $this->logger->info("Hook output: $output");
         }
     }
 
     /**
-     * Execute system command
+     * Execute system command (safe: non-blocking reads, timeout, close stdin)
      */
     private function executeCommand(string $command, int $timeout = 300): string
     {
-        $process = proc_open(
-            $command,
-            [
-                0 => ['pipe', 'r'],
-                1 => ['pipe', 'w'],
-                2 => ['pipe', 'w'],
-            ],
-            $pipes
-        );
+        $descriptorspec = [
+            0 => ['pipe', 'r'],
+            1 => ['pipe', 'w'],
+            2 => ['pipe', 'w'],
+        ];
+
+        $process = proc_open($command, $descriptorspec, $pipes);
 
         if (!is_resource($process)) {
             throw new \Exception("Failed to execute command: $command");
         }
 
-        $output = stream_get_contents($pipes[1]);
-        $error = stream_get_contents($pipes[2]);
+        // Close stdin - we don't send input
+        if (isset($pipes[0]) && is_resource($pipes[0])) {
+            fclose($pipes[0]);
+        }
 
-        fclose($pipes[1]);
-        fclose($pipes[2]);
+        // Set streams to non-blocking
+        if (isset($pipes[1]) && is_resource($pipes[1])) {
+            stream_set_blocking($pipes[1], false);
+        }
+        if (isset($pipes[2]) && is_resource($pipes[2])) {
+            stream_set_blocking($pipes[2], false);
+        }
+
+        $stdout = '';
+        $stderr = '';
+        $start = microtime(true);
+
+        // Poll streams until process exits or timeout
+        while (true) {
+            $status = proc_get_status($process);
+            $running = $status['running'];
+
+            if (isset($pipes[1]) && is_resource($pipes[1])) {
+                $stdoutChunk = stream_get_contents($pipes[1]);
+                if ($stdoutChunk !== false && $stdoutChunk !== '') {
+                    $stdout .= $stdoutChunk;
+                }
+            }
+            if (isset($pipes[2]) && is_resource($pipes[2])) {
+                $stderrChunk = stream_get_contents($pipes[2]);
+                if ($stderrChunk !== false && $stderrChunk !== '') {
+                    $stderr .= $stderrChunk;
+                }
+            }
+
+            if (!$running) {
+                break;
+            }
+
+            if ((microtime(true) - $start) > $timeout) {
+                // Attempt graceful termination
+                proc_terminate($process);
+                // give it a brief moment
+                usleep(100000);
+                $status = proc_get_status($process);
+                if ($status['running']) {
+                    // Force close
+                    proc_close($process);
+                }
+
+                throw new \Exception("Command timed out after {$timeout}s: $command\nPartial output: $stdout\nError output: $stderr");
+            }
+
+            // Sleep a little to avoid busy loop
+            usleep(10000);
+        }
+
+        // Read any remaining output
+        if (isset($pipes[1]) && is_resource($pipes[1])) {
+            $stdout .= stream_get_contents($pipes[1]);
+            fclose($pipes[1]);
+        }
+        if (isset($pipes[2]) && is_resource($pipes[2])) {
+            $stderr .= stream_get_contents($pipes[2]);
+            fclose($pipes[2]);
+        }
 
         $code = proc_close($process);
 
         if ($code !== 0) {
-            throw new \Exception("Command failed: $command\nError: $error");
+            throw new \Exception("Command failed (code $code): $command\nError: $stderr\nOutput: $stdout");
         }
 
-        return $output;
+        return $stdout;
     }
 
     /**
@@ -199,10 +262,19 @@ class Deployer
     private function cleanupReleases(): void
     {
         $keep = $this->config->get('deployment.keep_releases', 5);
+
+        if (!is_dir($this->releasesPath)) {
+            return;
+        }
+
         $releases = array_diff(
             scandir($this->releasesPath, SCANDIR_SORT_DESCENDING),
             ['.', '..']
         );
+
+        if (count($releases) <= $keep) {
+            return;
+        }
 
         $toDelete = array_slice($releases, $keep);
 
@@ -226,10 +298,10 @@ class Deployer
 
         foreach ($files as $file) {
             $path = $dir . '/' . $file;
-            is_dir($path) ? $this->removeDirectory($path) : unlink($path);
+            is_dir($path) ? $this->removeDirectory($path) : @unlink($path);
         }
 
-        rmdir($dir);
+        @rmdir($dir);
     }
 
     /**
@@ -259,6 +331,7 @@ class Deployer
             $ch = curl_init($url);
             curl_setopt_array($ch, [
                 CURLOPT_TIMEOUT => $timeout,
+                CURLOPT_CONNECTTIMEOUT => min(5, $timeout),
                 CURLOPT_RETURNTRANSFER => true,
                 CURLOPT_SSL_VERIFYPEER => $this->config->get('security.verify_ssl', true),
             ]);
