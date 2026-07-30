@@ -650,11 +650,4 @@ return [
 ];
 ```
 
----
 
-If you want, I can:
-- Add these README instructions to your repository automatically and commit them.
-- Create a small Nginx + systemd example for running the webhook site securely.
-- Provide a ready-to-run health endpoint (simple PHP file) to include in your web app.
-
-Which of the above would you like me to do next?
