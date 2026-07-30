@@ -53,7 +53,7 @@ class Security
     }
 
     /**
-     * Check if IP is in CIDR range
+     * Check if IP is in CIDR range (supports IPv4 and IPv6)
      */
     private function ipInRange(string $ip, string $range): bool
     {
@@ -62,12 +62,39 @@ class Security
         }
 
         [$subnet, $bits] = explode('/', $range);
-        $ip = ip2long($ip);
-        $subnet = ip2long($subnet);
-        $mask = -1 << (32 - (int)$bits);
-        $subnet &= $mask;
+        $ipBin = @inet_pton($ip);
+        $subnetBin = @inet_pton($subnet);
+        if ($ipBin === false || $subnetBin === false) {
+            return false;
+        }
 
-        return ($ip & $mask) === $subnet;
+        // Ensure same address family (IPv4 vs IPv6)
+        if (strlen($ipBin) !== strlen($subnetBin)) {
+            return false;
+        }
+
+        $bits = (int)$bits;
+        $bytes = intdiv($bits, 8);
+        $remainder = $bits % 8;
+
+        // Compare full bytes
+        if ($bytes > 0) {
+            if (substr($ipBin, 0, $bytes) !== substr($subnetBin, 0, $bytes)) {
+                return false;
+            }
+        }
+
+        // Compare remaining bits
+        if ($remainder > 0) {
+            $mask = (0xFF00 >> $remainder) & 0xFF; // high bits mask
+            $ipByte = ord($ipBin[$bytes]);
+            $subByte = ord($subnetBin[$bytes]);
+            if ((($ipByte & $mask) !== ($subByte & $mask))) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /**
@@ -75,11 +102,12 @@ class Security
      */
     private function getGitHubIps(): array
     {
+        // It's safer to maintain these via config or fetch from https://api.github.com/meta in production.
         return [
             '140.82.112.0/20',
             '143.55.64.0/20',
             '185.199.108.0/22',
-            '2606:4700:4700::/32',
+            // Note: keep this list updated or set security.restrict_to_github_ips = false while testing
         ];
     }
 
@@ -88,6 +116,6 @@ class Security
      */
     public static function isValidBranch(string $branch): bool
     {
-        return preg_match('/^[a-zA-Z0-9\/_\-.]+$/', $branch) === 1;
+        return preg_match('/^[a-zA-Z0-9\/\_\-.]+$/', $branch) === 1;
     }
 }
